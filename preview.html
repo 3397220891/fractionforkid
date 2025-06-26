@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>像素画游戏预览</title>
+  <style>
+    body { font-family: Arial, Helvetica, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); margin: 0; min-height: 100vh; }
+    .container { max-width: 1200px; margin: 0 auto; padding: 32px 16px; }
+    .main-header { font-size: 2.5rem; font-weight: bold; text-align: center; margin-bottom: 24px; background: linear-gradient(-45deg, #667eea, #764ba2, #f093fb, #f5576c); background-size: 400% 400%; -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .card { background: rgba(255,255,255,0.95); border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 24px; }
+    .theme-list { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; }
+    .theme-card { flex: 1 1 180px; min-width: 180px; max-width: 220px; background: linear-gradient(135deg, #fff9, #fff7); border-radius: 12px; border: 2px solid #e0e7ef; text-align: center; padding: 18px 8px; cursor: pointer; transition: box-shadow .3s, border-color .3s, transform .3s; }
+    .theme-card.selected { border-color: #667eea; box-shadow: 0 4px 16px #667eea33; transform: scale(1.04); }
+    .theme-emoji { font-size: 2rem; margin-bottom: 8px; }
+    .theme-name { font-weight: bold; margin-bottom: 4px; }
+    .theme-desc { color: #666; font-size: 0.95rem; }
+    .game-flex { display: flex; flex-wrap: wrap; gap: 32px; }
+    .pixel-area { flex: 1 1 420px; min-width: 320px; max-width: 520px; background: rgba(255,255,255,0.98); border-radius: 16px; box-shadow: 0 4px 16px #0001; padding: 24px; position:relative; }
+    .sidebar { flex: 1 1 220px; min-width: 220px; max-width: 320px; display: flex; flex-direction: column; gap: 24px; }
+    .pixel-grid { display: grid; grid-template-columns: repeat(20, 18px); grid-template-rows: repeat(20, 18px); gap: 2px; justify-content: center; margin: 0 auto; }
+    .pixel-btn { width: 18px; height: 18px; border-radius: 4px; border: 1px solid #e0e7ef; background: #fff; cursor: pointer; transition: box-shadow .2s, transform .2s; }
+    .pixel-btn:hover { box-shadow: 0 2px 8px #667eea33; transform: scale(1.15); z-index: 2; }
+    .color-list { display: flex; flex-direction: column; gap: 8px; }
+    .color-btn { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 8px; border: 2px solid #e0e7ef; background: #f8fafc; cursor: pointer; font-weight: 500; transition: border-color .2s, box-shadow .2s; }
+    .color-btn.selected { border-color: #667eea; box-shadow: 0 2px 8px #667eea33; background: #eef2ff; }
+    .color-dot { width: 18px; height: 18px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 1px 3px #0002; }
+    .stat-list { font-size: 1rem; color: #444; }
+    .stat-item { display: flex; justify-content: space-between; margin-bottom: 6px; }
+    .reset-btn { margin-top: 16px; width: 100%; padding: 8px 0; background: linear-gradient(135deg,#667eea,#764ba2); color: #fff; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 1rem; }
+    .back-btn { background: #fff; border: 1px solid #e0e7ef; border-radius: 8px; padding: 6px 16px; font-size: 1rem; font-weight: 600; color: #667eea; cursor: pointer; box-shadow: 0 2px 8px #667eea22; transition: background .2s, box-shadow .2s; position: absolute; top: 24px; left: 24px; z-index: 10; }
+    .back-btn:hover { background: #eef2ff; box-shadow: 0 4px 16px #667eea33; }
+    .pixel-title { font-size:1.2rem;font-weight:600;text-align:center;margin-bottom:12px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="main-header">Pixel Art Challenge</div>
+    <div class="card" id="theme-card">
+      <div style="font-size:1.2rem; font-weight:500; text-align:center; margin-bottom:16px;">选择你的创作主题</div>
+      <div class="theme-list" id="theme-list"></div>
+      <button id="start-btn" style="width:100%;margin-top:24px;padding:12px 0;font-size:1.1rem;background:linear-gradient(135deg,#667eea,#764ba2);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;">开始创作</button>
+    </div>
+    <div id="game-area" style="display:none;"></div>
+  </div>
+  <script>
+    // 主题数据
+    const GAME_THEMES = [
+      { id: "duck", name: "Big Yellow Duck", description: "Create the famous giant rubber duck!", emoji: "🦆" },
+      { id: "pond", name: "Pond Scene", description: "Paint a peaceful pond with nature", emoji: "🌊" },
+      { id: "forest", name: "Mountain Forest", description: "Design a lush forest landscape", emoji: "🌲" },
+      { id: "boat", name: "Sailing Adventure", description: "Draw a boat on windy waters", emoji: "⛵" },
+      { id: "garden", name: "Flower Garden", description: "Create a colorful blooming garden", emoji: "🌸" },
+      { id: "sunset", name: "Golden Sunset", description: "Capture a beautiful sunset sky", emoji: "🌅" },
+    ];
+    let selectedTheme = GAME_THEMES[0];
+    // 渲染主题卡片
+    const themeList = document.getElementById('theme-list');
+    GAME_THEMES.forEach(theme => {
+      const card = document.createElement('div');
+      card.className = 'theme-card' + (theme.id === selectedTheme.id ? ' selected' : '');
+      card.innerHTML = `<div class="theme-emoji">${theme.emoji}</div><div class="theme-name">${theme.name}</div><div class="theme-desc">${theme.description}</div>`;
+      card.onclick = () => {
+        selectedTheme = theme;
+        document.querySelectorAll('.theme-card').forEach(c => c.classList.remove('selected'));
+        card.classList.add('selected');
+      };
+      themeList.appendChild(card);
+    });
+    // 颜色数据
+    const DUCK_THEME_PLAYERS = [
+      { id: "yellow", name: "Duck Body", color: "#FFD700" },
+      { id: "orange", name: "Duck Beak", color: "#FF8C00" },
+      { id: "blue", name: "Water", color: "#4682B4" },
+      { id: "white", name: "Bubbles", color: "#F0F8FF" },
+      { id: "gray", name: "Shadows", color: "#708090" },
+    ];
+    const DEFAULT_PLAYERS = [
+      { id: "blue", name: "Blue", color: "#3B82F6" },
+      { id: "green", name: "Green", color: "#10B981" },
+      { id: "brown", name: "Brown", color: "#A16207" },
+      { id: "red", name: "Red", color: "#EF4444" },
+      { id: "yellow", name: "Yellow", color: "#F59E0B" },
+    ];
+    // 开始按钮
+    document.getElementById('start-btn').onclick = () => {
+      document.getElementById('theme-card').style.display = 'none';
+      renderGameArea();
+    };
+    function renderGameArea() {
+      const gameArea = document.getElementById('game-area');
+      gameArea.style.display = '';
+      // 选择颜色
+      let players = selectedTheme.id === 'duck' ? DUCK_THEME_PLAYERS : DEFAULT_PLAYERS;
+      let selectedColor = players[0].id;
+      // 初始化像素网格
+      const gridSize = 20;
+      let grid = Array.from({length: gridSize}, () => Array(gridSize).fill('white'));
+      // 渲染布局
+      gameArea.innerHTML = `
+        <div class="game-flex">
+          <div class="pixel-area">
+            <button class="back-btn" id="back-btn">&lt; 返回</button>
+            <div class="pixel-title">${selectedTheme.emoji} ${selectedTheme.name}</div>
+            <div class="pixel-grid" id="pixel-grid"></div>
+          </div>
+          <div class="sidebar">
+            <div class="card">
+              <div style="font-weight:600;margin-bottom:8px;">颜色选择</div>
+              <div class="color-list" id="color-list"></div>
+            </div>
+            <div class="card">
+              <div style="font-weight:600;margin-bottom:8px;">统计</div>
+              <div class="stat-list" id="stat-list"></div>
+              <button class="reset-btn" id="reset-btn">重置画布</button>
+            </div>
+          </div>
+        </div>
+      `;
+      // 返回按钮
+      document.getElementById('back-btn').onclick = () => {
+        gameArea.style.display = 'none';
+        document.getElementById('theme-card').style.display = '';
+      };
+      // 渲染像素网格
+      const pixelGrid = document.getElementById('pixel-grid');
+      function renderGrid() {
+        pixelGrid.innerHTML = '';
+        for(let r=0;r<gridSize;r++){
+          for(let c=0;c<gridSize;c++){
+            const btn = document.createElement('button');
+            btn.className = 'pixel-btn';
+            btn.style.background = grid[r][c]==='white' ? '#fff' : (players.find(p=>p.id===grid[r][c])?.color||'#fff');
+            btn.onclick = () => {
+              grid[r][c] = grid[r][c] === selectedColor ? 'white' : selectedColor;
+              renderGrid();
+              renderStats();
+            };
+            pixelGrid.appendChild(btn);
+          }
+        }
+      }
+      // 渲染颜色选择
+      const colorList = document.getElementById('color-list');
+      function renderColors() {
+        colorList.innerHTML = '';
+        players.forEach(player => {
+          const btn = document.createElement('button');
+          btn.className = 'color-btn' + (selectedColor===player.id?' selected':'');
+          btn.innerHTML = `<span class="color-dot" style="background:${player.color}"></span>${player.name}`;
+          btn.onclick = () => {
+            selectedColor = player.id;
+            renderColors();
+          };
+          colorList.appendChild(btn);
+        });
+      }
+      // 渲染统计
+      const statList = document.getElementById('stat-list');
+      function renderStats() {
+        let total = 0;
+        let colorCount = {};
+        for(let r=0;r<gridSize;r++){
+          for(let c=0;c<gridSize;c++){
+            if(grid[r][c] !== 'white'){
+              total++;
+              colorCount[grid[r][c]] = (colorCount[grid[r][c]]||0)+1;
+            }
+          }
+        }
+        statList.innerHTML = `
+          <div class="stat-item"><span>已上色像素</span><span>${total}</span></div>
+          <div class="stat-item"><span>覆盖率</span><span>${((total/(gridSize*gridSize))*100).toFixed(1)}%</span></div>
+        `;
+        players.forEach(player => {
+          statList.innerHTML += `<div class="stat-item"><span>${player.name}</span><span>${colorCount[player.id]||0}</span></div>`;
+        });
+      }
+      // 重置按钮
+      document.getElementById('reset-btn').onclick = () => {
+        grid = Array.from({length: gridSize}, () => Array(gridSize).fill('white'));
+        renderGrid();
+        renderStats();
+      };
+      renderGrid();
+      renderColors();
+      renderStats();
+    }
+  </script>
+</body>
+</html>
