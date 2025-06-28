@@ -1,5 +1,6 @@
 "use client"
 
+import * as React from "react"
 import { useState, useEffect, useMemo } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -80,25 +81,88 @@ const THEME_BACKGROUNDS = {
   },
 }
 
+// 颜色查找表，支持数字和 id
+const COLOR_LOOKUP: Record<string, string> = {
+  yellow: "#FFD700",
+  orange: "#FF8C00",
+  blue: "#4682B4",
+  white: "#F0F8FF",
+  gray: "#708090",
+  // 兼容模板数字
+  "1": "#FFD700",
+  "2": "#FF8C00",
+  "3": "#4682B4",
+  "4": "#F0F8FF",
+  "5": "#708090",
+  "0": "#FFFFFF",
+}
+
+// 主题像素模板（可扩展更多主题）
+const DUCK_IMAGE = [
+  "0000100000100000000",
+  "0001410001410000000",
+  "0001441114410000000",
+  "0012223232221000000",
+  "0012112221121000000",
+  "0122222422222100110",
+  "0122221212222101321",
+  "0132522222523112310",
+  "1222252225222213100",
+  "1332255555223312100",
+  "1222225552222213100",
+  "1333225552233312100",
+  "1322122522122313100",
+  "1222131213122211000",
+  "0122121212122100000",
+  "0011131113111000000",
+  "0000111011100000000",
+]
+
+function parseImage(image: string[], colorMap: Record<string, string>): string[][] {
+  return image.map(row => row.split("").map(cell => {
+    switch (cell) {
+      case "1": return "yellow"
+      case "2": return "orange"
+      case "3": return "blue"
+      case "4": return "white"
+      case "5": return "gray"
+      default: return "0"
+    }
+  }))
+}
+
 export default function ColorPixelGame() {
-  const [grid, setGrid] = useState<string[][]>(
-    Array(GRID_SIZE)
+  const [grid, setGrid] = useState<string[][]>(() => {
+    // 默认主题为 duck 时用模板，否则全白
+    if (GAME_THEMES[0].id === "duck") {
+      return parseImage(DUCK_IMAGE, COLOR_LOOKUP)
+    }
+    return Array(GRID_SIZE)
       .fill(null)
-      .map(() => Array(GRID_SIZE).fill("white")),
-  )
+      .map(() => Array(GRID_SIZE).fill("white"))
+  })
   const [selectedColor, setSelectedColor] = useState<string>("")
   const [players, setPlayers] = useState<ColorPlayer[]>(DEFAULT_PLAYERS)
   const [selectedTheme, setSelectedTheme] = useState<GameTheme>(GAME_THEMES[0])
   const [gameStarted, setGameStarted] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "success" | "error">("idle")
+  const [history, setHistory] = useState<string[][][]>([])
+  const [replayIndex, setReplayIndex] = useState(0)
 
   // Update players when theme changes
   useEffect(() => {
     if (selectedTheme.id === "duck") {
       setPlayers(DUCK_THEME_PLAYERS)
       setSelectedColor(DUCK_THEME_PLAYERS[0].id)
+      setGrid(parseImage(DUCK_IMAGE, COLOR_LOOKUP))
     } else {
       setPlayers(DEFAULT_PLAYERS)
       setSelectedColor(DEFAULT_PLAYERS[0].id)
+      setGrid(
+        Array(GRID_SIZE)
+          .fill(null)
+          .map(() => Array(GRID_SIZE).fill("white")),
+      )
     }
   }, [selectedTheme])
 
@@ -195,6 +259,68 @@ export default function ColorPixelGame() {
     }
   }
 
+  // 新增：像素渲染函数，ELM 风格
+  function renderPixelGrid(
+    grid: string[][],
+    players: ColorPlayer[],
+    onPixelClick: (row: number, col: number) => void
+  ): React.ReactElement {
+    return (
+      <div className="pixel-grid p-6 inline-block">
+        <div className="grid gap-1">
+          {grid.map((row, rowIndex) => (
+            <div key={rowIndex} className="flex gap-1">
+              {row.map((cell, colIndex) => (
+                <button
+                  key={`${rowIndex}-${colIndex}`}
+                  className="pixel-button w-7 h-7 border border-gray-300"
+                  style={{
+                    backgroundColor:
+                      cell === "white" || cell === "0"
+                        ? "rgba(255,255,255,0.95)"
+                        : players.find((p) => p.id === cell)?.color || COLOR_LOOKUP[cell] || "rgba(255,255,255,0.95)",
+                    boxShadow: cell !== "white" && cell !== "0" ? "inset 0 1px 3px rgba(0,0,0,0.1)" : "none",
+                  }}
+                  onClick={() => onPixelClick(rowIndex, colIndex)}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      </div>
+    )
+  }
+
+  const saveArtwork = async () => {
+    setSaveStatus("saving")
+    try {
+      const res = await fetch("/api/pixel-art", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          theme: selectedTheme.id,
+          pixels: grid,
+          user: "guest",
+          createdAt: new Date().toISOString(),
+        }),
+      })
+      if (res.ok) {
+        setSaveStatus("success")
+      } else {
+        setSaveStatus("error")
+      }
+    } catch {
+      setSaveStatus("error")
+    }
+  }
+
+  const fetchArtworkHistory = async (id: string) => {
+    const res = await fetch(`/api/pixel-art/${id}`)
+    const data = await res.json()
+    setHistory(data.history || [data.pixels])
+    setReplayIndex(0)
+  }
+
   return (
     <>
       <ThemeStyles />
@@ -280,28 +406,7 @@ export default function ColorPixelGame() {
                   </CardHeader>
                   <CardContent className="bg-white/70 backdrop-blur-sm relative z-10 p-8">
                     <div className="flex justify-center">
-                      <div className="pixel-grid p-6 inline-block">
-                        <div className="grid gap-1">
-                          {grid.map((row, rowIndex) => (
-                            <div key={rowIndex} className="flex gap-1">
-                              {row.map((cell, colIndex) => (
-                                <button
-                                  key={`${rowIndex}-${colIndex}`}
-                                  className="pixel-button w-7 h-7 border border-gray-300"
-                                  style={{
-                                    backgroundColor:
-                                      cell === "white"
-                                        ? "rgba(255,255,255,0.95)"
-                                        : players.find((p) => p.id === cell)?.color || "rgba(255,255,255,0.95)",
-                                    boxShadow: cell !== "white" ? "inset 0 1px 3px rgba(0,0,0,0.1)" : "none",
-                                  }}
-                                  onClick={() => handlePixelClick(rowIndex, colIndex)}
-                                />
-                              ))}
-                            </div>
-                          ))}
-                        </div>
-                      </div>
+                      {renderPixelGrid(history.length ? history[replayIndex] : grid, players, handlePixelClick)}
                     </div>
                   </CardContent>
                 </Card>
@@ -400,6 +505,39 @@ export default function ColorPixelGame() {
                           {players.filter((p) => p.status === "target").length}/{players.length}
                         </span>
                       </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="enhanced-card">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-lg">Save Artwork</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <Button onClick={saveArtwork} disabled={saveStatus === "saving"}>
+                      {saveStatus === "saving" ? "Saving..." : "Save Artwork"}
+                    </Button>
+                    {saveStatus === "success" && <span className="text-green-600 ml-2">Saved!</span>}
+                    {saveStatus === "error" && <span className="text-red-600 ml-2">Error!</span>}
+                  </CardContent>
+                </Card>
+
+                {/* History Controls */}
+                <Card className="enhanced-card">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="text-lg">History</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="space-y-4">
+                      {history.map((_, i) => (
+                        <Button
+                          key={i}
+                          onClick={() => setReplayIndex(i)}
+                          disabled={i === replayIndex}
+                        >
+                          Step {i + 1}
+                        </Button>
+                      ))}
                     </div>
                   </CardContent>
                 </Card>
