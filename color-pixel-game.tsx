@@ -42,7 +42,7 @@ const DUCK_THEME_PLAYERS: ColorPlayer[] = [
   { id: "yellow", name: "Duck Body", color: "#FFD700", targetRatio: 0.4, currentRatio: 0, status: "below" },
   { id: "orange", name: "Duck Beak", color: "#FF8C00", targetRatio: 0.1, currentRatio: 0, status: "below" },
   { id: "blue", name: "Water", color: "#4682B4", targetRatio: 0.3, currentRatio: 0, status: "below" },
-  { id: "white", name: "Bubbles", color: "#F0F8FF", targetRatio: 0.15, currentRatio: 0, status: "below" },
+  { id: "white", name: "White", color: "#e0e0e0", targetRatio: 0.15, currentRatio: 0, status: "below" },
   { id: "gray", name: "Shadows", color: "#708090", targetRatio: 0.05, currentRatio: 0, status: "below" },
 ]
 
@@ -86,15 +86,15 @@ const COLOR_LOOKUP: Record<string, string> = {
   yellow: "#FFD700",
   orange: "#FF8C00",
   blue: "#4682B4",
-  white: "#F0F8FF",
+  white: "#e0e0e0",
   gray: "#708090",
   // 兼容模板数字
   "1": "#FFD700",
   "2": "#FF8C00",
   "3": "#4682B4",
-  "4": "#F0F8FF",
+  "4": "#e0e0e0",
   "5": "#708090",
-  "0": "#FFFFFF",
+  "0": "",
 }
 
 // 主题像素模板（可扩展更多主题）
@@ -130,6 +130,11 @@ function parseImage(image: string[], colorMap: Record<string, string>): string[]
     }
   }))
 }
+
+const getPlayersWithErase = (players: ColorPlayer[]) => [
+  ...players,
+  { id: "erase", name: "Erase", color: null, targetRatio: 0, currentRatio: 0, status: "below" },
+]
 
 export default function ColorPixelGame() {
   const [grid, setGrid] = useState<string[][]>(() => {
@@ -173,7 +178,7 @@ export default function ColorPixelGame() {
 
     grid.forEach((row) => {
       row.forEach((cell) => {
-        if (cell !== "white") {
+        if (cell !== "0" && cell !== "erase") {
           colorCounts[cell] = (colorCounts[cell] || 0) + 1
           totalColoredPixels++
         }
@@ -215,8 +220,8 @@ export default function ColorPixelGame() {
       const newGrid = [...prevGrid]
       newGrid[row] = [...newGrid[row]]
 
-      if (newGrid[row][col] === selectedColor) {
-        newGrid[row][col] = "white"
+      if (selectedColor === "erase") {
+        newGrid[row][col] = "0"
       } else {
         newGrid[row][col] = selectedColor
       }
@@ -270,20 +275,27 @@ export default function ColorPixelGame() {
         <div className="grid gap-1">
           {grid.map((row, rowIndex) => (
             <div key={rowIndex} className="flex gap-1">
-              {row.map((cell, colIndex) => (
-                <button
-                  key={`${rowIndex}-${colIndex}`}
-                  className="pixel-button w-7 h-7 border border-gray-300"
-                  style={{
-                    backgroundColor:
-                      cell === "white" || cell === "0"
-                        ? "rgba(255,255,255,0.95)"
-                        : players.find((p) => p.id === cell)?.color || COLOR_LOOKUP[cell] || "rgba(255,255,255,0.95)",
-                    boxShadow: cell !== "white" && cell !== "0" ? "inset 0 1px 3px rgba(0,0,0,0.1)" : "none",
-                  }}
-                  onClick={() => onPixelClick(rowIndex, colIndex)}
-                />
-              ))}
+              {row.map((cell, colIndex) => {
+                let bg = "";
+                if (cell === "0" || cell === "erase") {
+                  bg = "transparent";
+                } else if (cell === "white") {
+                  bg = "#e0e0e0";
+                } else {
+                  bg = players.find((p) => p.id === cell)?.color || COLOR_LOOKUP[cell] || "#e0e0e0";
+                }
+                return (
+                  <button
+                    key={`${rowIndex}-${colIndex}`}
+                    className="pixel-button w-7 h-7 border border-gray-300"
+                    style={{
+                      backgroundColor: bg,
+                      boxShadow: cell !== "0" && cell !== "erase" ? "inset 0 1px 3px rgba(0,0,0,0.1)" : "none",
+                    }}
+                    onClick={() => onPixelClick(rowIndex, colIndex)}
+                  />
+                )
+              })}
             </div>
           ))}
         </div>
@@ -424,7 +436,7 @@ export default function ColorPixelGame() {
                   </CardHeader>
                   <CardContent>
                     <div className="space-y-3">
-                      {players.map((player) => (
+                      {getPlayersWithErase(players).map((player) => (
                         <button
                           key={player.id}
                           onClick={() => setSelectedColor(player.id)}
@@ -436,7 +448,7 @@ export default function ColorPixelGame() {
                         >
                           <div
                             className="w-6 h-6 rounded-full border-2 border-white shadow-sm"
-                            style={{ backgroundColor: player.color }}
+                            style={{ backgroundColor: player.color || "#fff", border: player.id === "erase" ? "2px dashed #aaa" : undefined }}
                           />
                           <span className="font-medium">{player.name}</span>
                         </button>
