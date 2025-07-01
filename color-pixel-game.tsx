@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, createContext, useContext, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
@@ -78,6 +78,44 @@ const THEME_BACKGROUNDS = {
     background: "linear-gradient(135deg, #FF6347 0%, #FF8C00 30%, #FFD700 60%, #FFA500 80%, #FF4500 100%)",
     className: "sunset-theme",
   },
+}
+
+// 多玩家协作上下文和Provider
+const MultiPlayerContext = createContext<any>(null)
+
+interface MultiPlayerProviderProps {
+  children: React.ReactNode;
+  roomId: string;
+  user: any;
+}
+
+export function MultiPlayerProvider({ children, roomId, user }: MultiPlayerProviderProps) {
+  // 这里可用WebSocket或Socket.io
+  const ws = useRef(null)
+  const [state, setState] = useState({
+    players: [], // {id, name, color}
+    grid: [], // 像素数据
+    self: user,
+    connected: false,
+  })
+  useEffect(() => {
+    // ws.current = new WebSocket(`wss://your-server/room/${roomId}`)
+    // ws.current.onopen = () => setState(s => ({...s, connected: true}))
+    // ws.current.onmessage = (msg) => { ...同步像素和玩家... }
+    // ws.current.onclose = () => setState(s => ({...s, connected: false}))
+    // return () => ws.current && ws.current.close()
+  }, [roomId])
+  // 发送像素操作、玩家变更等
+  const send = (data: any) => { /* ws.current?.send(JSON.stringify(data)) */ }
+  return (
+    <MultiPlayerContext.Provider value={{...state, send}}>
+      {children}
+    </MultiPlayerContext.Provider>
+  )
+}
+
+export function useMultiPlayer() {
+  return useContext(MultiPlayerContext)
 }
 
 export default function ColorPixelGame() {
